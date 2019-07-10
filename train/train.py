@@ -3,7 +3,7 @@ import torch
 from pytorch_pretrained_bert.optimization import BertAdam
 
 import config.args as args
-from util.plot_util import loss_acc_plot
+from util.plot_util import loss_acc_f1_step_plot,loss_acc_epoch_plot
 from util.Logginger import init_logger
 from evaluate.loss import loss_fn
 from evaluate.acc_f1 import qa_evaluate
@@ -15,12 +15,13 @@ torch.manual_seed(args.seed)
 torch.cuda.manual_seed(args.seed)
 torch.cuda.manual_seed_all(args.seed)
 import warnings
+
 warnings.filterwarnings('ignore')
 
 
 def warmup_linear(x, warmup=0.002):
     if x < warmup:
-        return x/warmup
+        return x / warmup
     return 1.0 - x
 
 
@@ -28,7 +29,7 @@ def fit(model, training_iter, eval_iter, num_epoch, pbar, num_train_steps, verbo
     # ------------------判断CUDA模式----------------------
     if args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-        n_gpu = torch.cuda.device_count()   # 多GPU
+        n_gpu = torch.cuda.device_count()  # 多GPU
         # n_gpu = 1
     else:
         torch.cuda.set_device(args.local_rank)
@@ -100,7 +101,11 @@ def fit(model, training_iter, eval_iter, num_epoch, pbar, num_train_steps, verbo
         "eval_acc": eval_accuracy
     }
 
-# ------------------------训练------------------------------
+    train_steps_loss = []
+    train_steps_acc = []
+    train_steps_f1 = []
+
+    # ------------------------训练------------------------------
     best_f1 = 0
     start = time.time()
     global_step = 0
@@ -110,7 +115,8 @@ def fit(model, training_iter, eval_iter, num_epoch, pbar, num_train_steps, verbo
             batch = tuple(t.to(device) for t in batch)
             input_ids, input_mask, segment_ids, start_positions, end_positions, answer_types = batch
             start_logits, end_logits, answer_type_logits = model(input_ids, segment_ids, input_mask)
-            train_loss = loss_fn(start_logits, end_logits, answer_type_logits, start_positions, end_positions, answer_types)
+            train_loss = loss_fn(start_logits, end_logits, answer_type_logits, start_positions, end_positions,
+                                 answer_types)
 
             if args.gradient_accumulation_steps > 1:
                 train_loss = train_loss / args.gradient_accumulation_steps
@@ -134,7 +140,11 @@ def fit(model, training_iter, eval_iter, num_epoch, pbar, num_train_steps, verbo
             train_acc, f1 = qa_evaluate((start_logits, end_logits), (start_positions, end_positions))
             pbar.show_process(train_acc, train_loss.item(), f1, time.time() - start, step)
 
-# -----------------------验证----------------------------
+            train_steps_loss.append(train_loss.item())
+            train_steps_acc.append(train_acc)
+            train_steps_f1.append(f1)
+
+        # -----------------------验证----------------------------
         model.eval()
         count = 0
         y_predicts, y_labels = [], []
@@ -146,7 +156,8 @@ def fit(model, training_iter, eval_iter, num_epoch, pbar, num_train_steps, verbo
                 batch = tuple(t.to(device) for t in batch)
                 input_ids, input_mask, segment_ids, start_positions, end_positions, answer_types = batch
                 start_logits, end_logits, answer_type_logits = model(input_ids, segment_ids, input_mask)
-                eval_los = loss_fn(start_logits, end_logits, answer_type_logits, start_positions, end_positions, answer_types)
+                eval_los = loss_fn(start_logits, end_logits, answer_type_logits, start_positions, end_positions,
+                                   answer_types)
                 eval_loss = eval_los + eval_loss
                 count += 1
                 eval_starts_predict.append(start_logits)
@@ -163,10 +174,11 @@ def fit(model, training_iter, eval_iter, num_epoch, pbar, num_train_steps, verbo
             eval_acc, eval_f1 = qa_evaluate(eval_predicted, eval_labeled)
 
             logger.info(
-                '\n\nEpoch %d - train_loss: %4f - eval_loss: %4f - train_acc:%4f - eval_acc:%4f - eval_f1:%4f\n'
+                '\n\nEpoch %d - global steps: %6d - train_loss: %4f - eval_loss: %4f - train_acc:%4f - eval_acc:%4f - eval_f1:%4f\n'
                 % (e + 1,
+                   global_step,
                    train_loss.item(),
-                   eval_loss.item()/count,
+                   eval_loss.item() / count,
                    train_acc,
                    eval_acc,
                    eval_f1))
@@ -174,11 +186,12 @@ def fit(model, training_iter, eval_iter, num_epoch, pbar, num_train_steps, verbo
             # 保存最好的模型
             if eval_f1 > best_f1:
                 best_f1 = eval_f1
-                save_model(model, args.output_dir,e)
+                save_model(model, args.output_dir, e)
 
             if e % verbose == 0:
                 train_losses.append(train_loss.item())
                 train_accuracy.append(train_acc)
-                eval_losses.append(eval_loss.item()/count)
+                eval_losses.append(eval_loss.item() / count)
                 eval_accuracy.append(eval_acc)
-    loss_acc_plot(history)
+    loss_acc_epoch_plot(history, "loss_acc_epoch.png")
+    loss_acc_f1_step_plot(train_steps_loss, train_steps_acc, train_steps_f1, "loss_acc_f1_step.png")

@@ -1,6 +1,6 @@
 # ---------- Train -------------------
 log_path = "output/logs"
-plot_path = "output/images/loss_acc.png"
+plot_path = "output/images/"
 data_dir = "data/"
 output_dir = "output/checkpoint"
 VOCAB_FILE = "pretrained_model/vocab.txt"
