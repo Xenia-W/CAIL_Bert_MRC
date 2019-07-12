@@ -6,7 +6,7 @@ import os
 plt.switch_backend('agg')
 
 
-def loss_acc_epoch_plot(history, filename):
+def loss_acc_epoch_plot(history, filename = "loss_acc_epoch.png"):
     train_loss = history['train_loss']
     eval_loss = history['eval_loss']
     train_accuracy = history['train_acc']
@@ -34,7 +34,7 @@ def loss_acc_epoch_plot(history, filename):
     plt.savefig(os.path.join(config.plot_path, filename))
 
 
-def loss_acc_f1_step_plot(step_loss, step_acc, step_f1, filename):
+def loss_acc_f1_step_plot(step_loss, step_acc, step_f1, filename="loss_acc_f1_step.png"):
     train_loss = step_loss
     train_accuracy = step_acc
     train_f1 = step_f1

@@ -1,10 +1,11 @@
-/__pycache__
+__pycache__/
 
-/output
-/data
-/pretrained_model
+/output/
+/data/
+/pretrained_model/
 
 *.log
 *.zip
 *.json
 *.tar.gz
+*.bin

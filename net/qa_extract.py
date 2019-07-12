@@ -1,4 +1,7 @@
+import torch
 import torch.nn as nn
+from config import args
+from util.nn import LSTM
 from pytorch_pretrained_bert.modeling import BertPreTrainedModel, BertModel
 
 
@@ -51,6 +54,8 @@ class QaExtract(BertPreTrainedModel):
                                                     attention_mask,
                                                     output_all_encoded_layers=output_all_encoded_layers)  # (B, T, 768)
         seq_len = sequence_output.size(1)
+        seq_len = torch.Tensor([seq_len for _ in range(sequence_output.size(0))]).cuda()
+
         '''prediciton of baseline
         logits = self.classifier(sequence_output)                                          # (B, T, 2)
         start_logits, end_logits = logits.split(1, dim=-1)                                 # ((B, T, 1), (B, T, 1))
@@ -67,16 +72,16 @@ class QaExtract(BertPreTrainedModel):
         '''
 
         start_input = sequence_output
-        start_output = self.start_lstm((start_input, seq_len))
-        start_logits = self.start_linear(start_output)
+        start_output = self.start_lstm((start_input, seq_len))[0]
+        start_logits = self.start_linear(start_output).squeeze(-1)
 
         end_input = torch.cat([sequence_output, start_output], dim=-1)
-        end_output = self.end_lstm((end_input, seq_len))
-        end_logits = self.end_linear(end_output)
+        end_output = self.end_lstm((end_input, seq_len))[0]
+        end_logits = self.end_linear(end_output).squeeze(-1)
 
         type_input = torch.cat([sequence_output, end_output], dim=-1)
-        type_output = torch.max(self.type_lstm((type_input, context_lens)), dim=1)[0]
+        type_output = torch.max(self.type_lstm((type_input, seq_len))[0], dim=1)[0]
         type_logits = type_output
-        answer_type_logits = self.type_linear(type_logits)
+        answer_type_logits = self.type_linear(type_logits).squeeze(-1)
         
         return start_logits, end_logits, answer_type_logits
