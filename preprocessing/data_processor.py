@@ -12,14 +12,15 @@ logger = init_logger("QA", logging_path=args.log_path)
 
 class InputExample(object):
     "Template for a single data"
+
     def __init__(self,
-                 qas_id,                    # question id
-                 question_text,             # question text
-                 doc_tokens,                # context
-                 orig_answer_text=None,     # answer text
-                 start_position=None,       # For Yes, No & no-answer, start_position = 0
-                 end_position=None,         # For Yes, No & no-answer, start_position = 0
-                 answer_type=None           # We denote answer type as Yes: 0 No: 1 no-answer: 2 long-answer: 3
+                 qas_id,  # question id
+                 question_text,  # question text
+                 doc_tokens,  # context
+                 orig_answer_text=None,  # answer text
+                 start_position=None,  # For Yes, No & no-answer, start_position = 0
+                 end_position=None,  # For Yes, No & no-answer, start_position = 0
+                 answer_type=None  # We denote answer type as Yes: 0 No: 1 no-answer: 2 long-answer: 3
                  ):
         self.qas_id = qas_id
         self.question_text = question_text
@@ -32,16 +33,17 @@ class InputExample(object):
 
 class InputFeatures(object):
     "Feature to feed into model"
+
     def __init__(self,
-                 unique_id,                   # feature id
-                 example_index,               # example index, note this is different from qas_id
-                 doc_span_index,              # split context index
-                 tokens,                      # question token + context + flag character
-                 token_to_orig_map,           # token index before BertTokenize
+                 unique_id,  # feature id
+                 example_index,  # example index, note this is different from qas_id
+                 doc_span_index,  # split context index
+                 tokens,  # question token + context + flag character
+                 token_to_orig_map,  # token index before BertTokenize
                  token_is_max_context,
-                 input_ids,                   # model input, the id of tokens
+                 input_ids,  # model input, the id of tokens
                  input_mask,
-                 segment_ids,                 # For distinguishing question & context
+                 segment_ids,  # For distinguishing question & context
                  start_position=None,
                  end_position=None,
                  answer_type=None):
@@ -59,7 +61,7 @@ class InputFeatures(object):
         self.answer_type = answer_type
 
 
-def train_val_split(X, y, valid_size=0.25, random_state=2019, shuffle=True):
+def train_val_split(X, y, valid_size=0.2, random_state=2019, shuffle=True):
     """
     训练集验证集分割
     :param X: sentences
@@ -97,6 +99,57 @@ def train_val_split(X, y, valid_size=0.25, random_state=2019, shuffle=True):
     return train, valid
 
 
+def train_val_cross_split(X, y, n_split, random_state=2019, shuffle=True):
+    """
+    训练集验证集交叉验证分割
+    :param X: context
+    :param y: answer type
+    :param n_split: 交叉验证的K值
+    :param random_state: 随机种子
+    :param shuffle: 是否随机打乱
+    """
+    logger.info('train val split')
+    '''for cross validation'''
+    valid_size = 1 / n_split
+    train_k = [[] for _ in range(n_split)]
+    valid_k = [[] for _ in range(n_split)]
+
+    bucket = [[] for _ in [i for i in range(len(args.answer_type))]]
+
+    for data_x, data_y in tqdm(zip(X, y), desc='bucket'):
+        bucket[int(data_y)].append((data_x, data_y))
+
+    del X, y
+
+    for bt in tqdm(bucket, desc='split'):
+        N = len(bt)
+        if N == 0:
+            continue
+        test_size = int(N * valid_size)
+
+        if shuffle:
+            random.seed(random_state)
+            random.shuffle(bt)
+        for i in range(n_split):
+            start_n = i * test_size
+            end_n = (i + 1) * test_size
+            if i == (n_split - 1):
+                end_n = N
+            for j in range(n_split):
+                if i == j:
+                    valid_k[j].extend(bt[start_n:end_n])
+                else:
+                    train_k[j].extend(bt[start_n:end_n])
+
+    if shuffle:
+        random.seed(random_state)
+        for i in range(n_split):
+            random.shuffle(valid_k[i])
+            random.shuffle(train_k[i])
+
+    return train_k, valid_k
+
+
 def read_squad_data(raw_data, save_dir, is_training=True):
     logger.info("Read raw squad data...")
     logger.info("train_dev_split is %s" % str(is_training))
@@ -121,7 +174,7 @@ def read_squad_data(raw_data, save_dir, is_training=True):
                 example_id = qa["id"]
                 assert len(answers) <= 1, "Found more than one answer for one question"
 
-                is_impossible = qa["is_impossible"]    # if true, means long-answer, Yes & no, otherwise, means no-answer
+                is_impossible = qa["is_impossible"]  # if true, means long-answer, Yes & no, otherwise, means no-answer
                 # no-answer
                 if is_impossible == "true" or len(answers) == 0:
                     answer_type = "no-answer"
@@ -144,27 +197,69 @@ def read_squad_data(raw_data, save_dir, is_training=True):
                         # For long-answer
                         else:
                             start_position = answer["answer_start"]
-                            end_position = start_position + len(answer_text) -1
+                            end_position = start_position + len(answer_text) - 1
                             answer_type = "long-answer"
                         sample = {"case_id": case_id, "context": context, "domain": domain, "case_name": case_name,
                                   "question": question, "answer_type": answer_type, "answer_text": answer_text,
-                                  "start_position": start_position, "end_position": end_position, "example_id": example_id}
+                                  "start_position": start_position, "end_position": end_position,
+                                  "example_id": example_id}
                         samples.append(sample)
 
     if is_training:
         y = [args.answer_type[sample["answer_type"]] for sample in samples]
-        train, valid = train_val_split(samples, y)
-        logger.info("Train set size is %d" % len(train))
-        logger.info("Dev set size is %d" % len(valid))
-        with open(os.path.join(save_dir, "train.json"), 'w') as fr:
-            for t in train:
+
+        samples_civil = []
+        samples_criminal = []
+        for sample in samples:
+            if sample['domain'] == "civil":
+                samples_civil.append(sample)
+            elif sample['domain'] == "criminal":
+                samples_criminal.append(sample)
+
+        # for civil data
+        y_civil = [args.answer_type[sample["answer_type"]] for sample in samples_civil]
+        train_civil, valid_civil = train_val_split(samples_civil, y_civil)
+
+        logger.info("Train_civil set size is %d" % len(train_civil))
+        logger.info("Dev_civil set size is %d" % len(valid_civil))
+        with open(os.path.join(save_dir, "train_civil.json"), 'w') as fr:
+            for t in train_civil:
                 print(json.dumps(t[0], ensure_ascii=False), file=fr)
-        with open(os.path.join(save_dir, "dev.json"), 'w') as fr:
-            for v in valid:
+        with open(os.path.join(save_dir, "dev_civil.json"), 'w') as fr:
+            for v in valid_civil:
                 print(json.dumps(v[0], ensure_ascii=False), file=fr)
+
+        # for criminal data
+        y_criminal = [args.answer_type[sample["answer_type"]] for sample in samples_criminal]
+        train_criminal, valid_criminal = train_val_split(samples_criminal, y_criminal)
+
+        logger.info("Train_criminal set size is %d" % len(train_criminal))
+        logger.info("Dev_criminal set size is %d" % len(valid_criminal))
+        with open(os.path.join(save_dir, "train_criminal.json"), 'w') as fr:
+            for t in train_criminal:
+                print(json.dumps(t[0], ensure_ascii=False), file=fr)
+        with open(os.path.join(save_dir, "dev_criminal.json"), 'w') as fr:
+            for v in valid_criminal:
+                print(json.dumps(v[0], ensure_ascii=False), file=fr)
+
+        '''cross-validation split'''
+        k = args.cross_validation_k
+        train_k, valid_k = train_val_cross_split(samples, y, k)
+        for i in range(len(train_k)):
+            train = train_k[i]
+            valid = valid_k[i]
+
+            logger.info("Cross-valid {}-th train set size is {}".format(i, len(train)))
+            logger.info("Cross-valid {}-th dev set size is {}".format(i, len(valid)))
+            with open(os.path.join(save_dir, "train_{}.json".format(i)), 'w') as fr:
+                for t in train:
+                    print(json.dumps(t[0], ensure_ascii=False), file=fr)
+            with open(os.path.join(save_dir, "dev_{}.json".format(i)), 'w') as fr:
+                for v in valid:
+                    print(json.dumps(v[0], ensure_ascii=False), file=fr)
     else:
         with open(os.path.join(save_dir, "test.json"), 'w') as fr:
-            logger.info("Test set size is %d" %len(samples))
+            logger.info("Test set size is %d" % len(samples))
             for sample in samples:
                 print(json.dumps(sample), file=fr)
 
@@ -172,7 +267,14 @@ def read_squad_data(raw_data, save_dir, is_training=True):
 def read_qa_examples(data_dir, corpus_type):
     assert corpus_type in ["train", "dev", "test"], "Unknown corpus type"
     examples = []
-    with open(os.path.join(data_dir, corpus_type +'.json'), 'r') as fr:
+    
+    filename = os.path.join(data_dir, corpus_type + '.json')
+    if args.do_ensemble and corpus_type == 'train':
+        filename = os.path.join(data_dir, args.train_file)
+    if args.do_ensemble and corpus_type == 'dev':
+        filename = os.path.join(data_dir, args.dev_file)
+
+    with open(filename, 'r') as fr:
         for i, data in enumerate(fr):
             data = json.loads(data.strip("\n"))
             example = InputExample(qas_id=data["example_id"],
@@ -182,9 +284,9 @@ def read_qa_examples(data_dir, corpus_type):
                                    start_position=data["start_position"],
                                    end_position=data["end_position"],
                                    answer_type=data["answer_type"])
-            
+
             examples.append(example)
-                
+
     return examples
 
 
@@ -257,7 +359,7 @@ def convert_examples_to_features(examples,
                 token_to_orig_map[len(tokens)] = tok_to_orig_index[split_token_index]
 
                 is_max_context = _check_is_max_context(doc_spans, doc_span_index,
-                                                           split_token_index)
+                                                       split_token_index)
                 token_is_max_context[len(tokens)] = is_max_context
                 tokens.append(all_doc_tokens[split_token_index])
                 segment_ids.append(1)
@@ -316,23 +418,21 @@ def convert_examples_to_features(examples,
                 logger.info("doc_span_index: %s" % (doc_span_index))
                 logger.info("tokens: %s" % " ".join(tokens))
                 logger.info("token_to_orig_map: %s" % " ".join([
-                        "%d:%d" % (x, y) for (x, y) in token_to_orig_map.items()]))
+                    "%d:%d" % (x, y) for (x, y) in token_to_orig_map.items()]))
                 logger.info("token_is_max_context: %s" % " ".join([
-                        "%d:%s" % (x, y) for (x, y) in token_is_max_context.items()]))
+                    "%d:%s" % (x, y) for (x, y) in token_is_max_context.items()]))
                 logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
                 logger.info(
-                        "input_mask: %s" % " ".join([str(x) for x in input_mask]))
+                    "input_mask: %s" % " ".join([str(x) for x in input_mask]))
                 logger.info(
-                        "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
+                    "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
                 if is_training:
                     answer_text = " ".join(tokens[start_position:(end_position + 1)])
                     logger.info("start_position: %d" % (start_position))
                     logger.info("end_position: %d" % (end_position))
                     logger.info(
-                            "answer: %s" % (answer_text))
-                    logger.info("answer_type: %s" %answer_type)
-
-                
+                        "answer: %s" % (answer_text))
+                    logger.info("answer_type: %s" % answer_type)
 
             features.append(
                 InputFeatures(
@@ -399,16 +499,3 @@ def _check_is_max_context(doc_spans, cur_span_index, position):
             best_span_index = span_index
 
     return cur_span_index == best_span_index
-
-
-if __name__ == '__main__':
-    read_squad_data("data/small_train_data.json", "data/")
-'''
-    examples = read_qa_examples("data/", "train")
-    convert_examples_to_features(examples,
-                                 tokenizer=BertTokenizer("pretrained_model/vocab.txt"),
-                                 max_seq_length=512,
-                                 doc_stride=500,
-                                 max_query_length=32,
-                                 is_training=True)
-'''

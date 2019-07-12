@@ -7,6 +7,8 @@ import config.args as args
 def save_model(model, output_dir,e):
     model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
     output_model_file = os.path.join(output_dir, "pytorch_model.bin_epoch_{}".format(e))
+    if args.do_ensemble:
+        output_model_file = os.path.join(output_dir, args.output_model_file+"_epoch_{}".format(e))
     torch.save(model_to_save.state_dict(), output_model_file)
 
 

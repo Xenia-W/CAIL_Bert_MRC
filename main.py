@@ -14,4 +14,4 @@ if __name__ == '__main__':
         res = {"answer": answer, "id": key}
         result.append(res)
     with open("../result/result.json", 'w') as fr:
-        json.dump(result, fr,ensure_ascii=False)
+        json.dump(result, fr, ensure_ascii=False)
