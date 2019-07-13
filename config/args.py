@@ -1,17 +1,8 @@
+# paras used for ensemble training
+index_ensemble_model = 'civil'
+do_ensemble = False
+
 # ---------- Train -------------------
-# ensemble paras
-index_ensemble_model = 0
-
-train_file = "train_{}.json".format(index_ensemble_model)
-dev_file = "dev_{}.json".format(index_ensemble_model)
-output_model_file = "pytorch_model_{}.bin".format(index_ensemble_model)
-do_ensemble = True
-cross_validation_k = 5
-nums_ensemble_models = 7
-# model super-paras
-LSTM_hidden_size = 256
-LSTM_dropout = 0.2
-
 log_path = "output/logs"
 plot_path = "output/images/"
 data_dir = "data/"
@@ -35,6 +26,25 @@ fp16 = False
 loss_scale = 0.
 
 answer_type = {"YES": 0, "NO": 1, "no-answer": 2, "long-answer": 3}
+
+# ensemble paras
+train_file = "train_{}.json".format(index_ensemble_model)
+dev_file = "dev_{}.json".format(index_ensemble_model)
+output_model_file = "pytorch_model_{}.bin".format(index_ensemble_model)
+cross_validation_k = 5
+nums_ensemble_models = 7
+
+if do_ensemble and index_ensemble_model == 'civil':
+    VOCAB_FILE = "pretrained_model/civil/vocab.txt"
+    bert_model = "pretrained_model/civil"
+
+if do_ensemble and index_ensemble_model == 'criminal':
+    VOCAB_FILE = "pretrained_model/criminal/vocab.txt"
+    bert_model = "pretrained_model/criminal"
+
+# model super-paras
+LSTM_hidden_size = 256
+LSTM_dropout = 0.2
 
 
 # ------------ Predict -----------------

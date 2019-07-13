@@ -183,7 +183,7 @@ class CJRCEvaluator():
 def parse_args():
     parser = argparse.ArgumentParser('Official evaluation script for CJRC based on CoQA.')
     parser.add_argument('--data-file', default='../data/data.json', dest="data_file", help='Input data JSON file.')
-    parser.add_argument('--pred-file', default='../result/0_result.json', dest="pred_file", help='Model predictions.')
+    parser.add_argument('--pred-file', default='../result/result.json', dest="pred_file", help='Model predictions.')
     parser.add_argument('--out-file', '-o', metavar='eval.json',
                         help='Write accuracy metrics to file (default is stdout).')
     parser.add_argument('--verbose', '-v', action='store_true')
