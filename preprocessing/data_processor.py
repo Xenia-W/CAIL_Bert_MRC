@@ -20,7 +20,8 @@ class InputExample(object):
                  orig_answer_text=None,  # answer text
                  start_position=None,  # For Yes, No & no-answer, start_position = 0
                  end_position=None,  # For Yes, No & no-answer, start_position = 0
-                 answer_type=None  # We denote answer type as Yes: 0 No: 1 no-answer: 2 long-answer: 3
+                 answer_type=None,  # We denote answer type as Yes: 0 No: 1 no-answer: 2 long-answer: 3
+                 domain=None
                  ):
         self.qas_id = qas_id
         self.question_text = question_text
@@ -29,6 +30,7 @@ class InputExample(object):
         self.start_position = start_position
         self.end_position = end_position
         self.answer_type = answer_type
+        self.domain = domain
 
 
 class InputFeatures(object):
@@ -46,7 +48,8 @@ class InputFeatures(object):
                  segment_ids,  # For distinguishing question & context
                  start_position=None,
                  end_position=None,
-                 answer_type=None):
+                 answer_type=None,
+                 domain=None):
         self.unique_id = unique_id
         self.example_index = example_index
         self.doc_span_index = doc_span_index
@@ -59,6 +62,7 @@ class InputFeatures(object):
         self.start_position = start_position
         self.end_position = end_position
         self.answer_type = answer_type
+        self.domain = domain
 
 
 def train_val_split(X, y, valid_size=0.2, random_state=2019, shuffle=True):
@@ -283,7 +287,8 @@ def read_qa_examples(data_dir, corpus_type):
                                    orig_answer_text=data["answer_text"],
                                    start_position=data["start_position"],
                                    end_position=data["end_position"],
-                                   answer_type=data["answer_type"])
+                                   answer_type=data["answer_type"],
+                                   domain = data["domain"])
 
             examples.append(example)
 
@@ -385,6 +390,7 @@ def convert_examples_to_features(examples,
             start_position = None
             end_position = None
             answer_type = None
+            domain_type = args.domain_type[example.domain]
             if is_training:
                 # For training, if our document chunk does not contain an annotation
                 # we throw it out, since there is nothing to predict.
@@ -410,7 +416,7 @@ def convert_examples_to_features(examples,
                     answer_type = "no-answer"
 
                 answer_type = args.answer_type[answer_type]
-
+            '''
             if example_index < 20:
                 logger.info("*** Example ***")
                 logger.info("unique_id: %s" % (unique_id))
@@ -433,6 +439,7 @@ def convert_examples_to_features(examples,
                     logger.info(
                         "answer: %s" % (answer_text))
                     logger.info("answer_type: %s" % answer_type)
+            '''
 
             features.append(
                 InputFeatures(
@@ -447,7 +454,8 @@ def convert_examples_to_features(examples,
                     segment_ids=segment_ids,
                     start_position=start_position,
                     end_position=end_position,
-                    answer_type=answer_type))
+                    answer_type=answer_type,
+                    domain=domain_type))
             unique_id += 1
 
     return features

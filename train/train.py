@@ -113,10 +113,11 @@ def fit(model, training_iter, eval_iter, num_epoch, pbar, num_train_steps, verbo
         model.train()
         for step, batch in enumerate(training_iter):
             batch = tuple(t.to(device) for t in batch)
-            input_ids, input_mask, segment_ids, start_positions, end_positions, answer_types = batch
-            start_logits, end_logits, answer_type_logits = model(input_ids, segment_ids, input_mask)
+            input_ids, input_mask, segment_ids, start_positions, end_positions, answer_types, domain_types = batch
+            start_logits, end_logits, answer_type_logits, domain_type_logits = model(input_ids, segment_ids, input_mask)
             train_loss = loss_fn(start_logits, end_logits, answer_type_logits, start_positions, end_positions,
-                                 answer_types)
+                                 answer_types,
+                                 domain_type_logits, domain_types)
 
             if args.gradient_accumulation_steps > 1:
                 train_loss = train_loss / args.gradient_accumulation_steps
@@ -154,10 +155,11 @@ def fit(model, training_iter, eval_iter, num_epoch, pbar, num_train_steps, verbo
         with torch.no_grad():
             for step, batch in enumerate(eval_iter):
                 batch = tuple(t.to(device) for t in batch)
-                input_ids, input_mask, segment_ids, start_positions, end_positions, answer_types = batch
-                start_logits, end_logits, answer_type_logits = model(input_ids, segment_ids, input_mask)
+                input_ids, input_mask, segment_ids, start_positions, end_positions, answer_types, domain_types = batch
+                start_logits, end_logits, answer_type_logits, domain_type_logits = model(input_ids, segment_ids, input_mask)
                 eval_los = loss_fn(start_logits, end_logits, answer_type_logits, start_positions, end_positions,
-                                   answer_types)
+                                   answer_types,
+                                   domain_type_logits, domain_types)
                 eval_loss = eval_los + eval_loss
                 count += 1
                 eval_starts_predict.append(start_logits)

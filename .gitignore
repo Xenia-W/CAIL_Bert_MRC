@@ -1,11 +1,8 @@
 /*/__pycache__/
 
-/output/
-/data/
-/pretrained_model/
-
 *.log
 *.zip
 *.json
 *.tar.gz
-*.bin
+*.bin*
+*.png
